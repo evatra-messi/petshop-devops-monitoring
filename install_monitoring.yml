@@ -29,16 +29,7 @@
         state: started
         restart_policy: always
         network_mode: host  # Permet d'accéder aux métriques réelles de l'hôte
-
-    - name: Lancer Prometheus
-      docker_container:
-        name: prometheus
-        image: prom/prometheus:latest
-        state: started
-        restart_policy: always
-        network_mode: host  # Facilite la communication avec Node Exporter sur localhost:9100
-        volumes:
-          - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+        
 
     - name: Lancer Grafana
       docker_container:
@@ -46,7 +37,18 @@
         image: grafana/grafana:latest
         state: started
         restart_policy: always
+        published_ports:- name: Lancer Prometheus
+      docker_container:
+      
+     - name: prometheus
+        image: prom/prometheus:latest
+        state: started
+        restart_policy: always
+        # Supprime network_mode: host et remplace par :
         published_ports:
+          - "9090:9090"
+        volumes:
+          - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
           - "3000:3000"
         env:
           GF_SECURITY_ADMIN_PASSWORD: "Passer123@"
