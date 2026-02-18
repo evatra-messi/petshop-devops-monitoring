@@ -1,51 +1,88 @@
-name: CI/CD Petshop Full Pipeline
+---
+- name: Déploiement Complet Petshop + SOC Security (Hydra Detection)
+  hosts: all
+  become: yes
+  vars:
+    docker_username: "{{ lookup('env', 'DOCKER_USERNAME') | default('ndeyeawambow') }}"
 
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  tasks:
+    # --- 1. PRÉPARATION DES RÉPERTOIRES & CONFIG ---
+    - name: Créer les dossiers de configuration
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /etc/prometheus
+        - /etc/promtail # Pour la collecte des logs (SOC)
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+    - name: Configuration Prometheus (IP Passerelle Docker)
+      copy:
+        dest: /etc/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 5s
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets: ['172.17.0.1:9100']
+            - job_name: 'cadvisor'
+              static_configs:
+                - targets: ['172.17.0.1:8080']
 
-    steps:
-      - name: Checkout du code
-        uses: actions/checkout@v3
+    # --- 2. DÉPLOIEMENT DE L'APPLICATION ---
+    - name: Lancer Petshop App
+      community.docker.docker_container:
+        name: petshop-app
+        image: "{{ docker_username }}/petshop:latest"
+        state: started
+        restart_policy: always
+        published_ports: ["80:80"]
 
-      # --- PARTIE 1 : DOCKER (CONSTRUCTION) ---
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+    # --- 3. DÉPLOIEMENT DU MONITORING (Target Vertes) ---
+    - name: Lancer Node Exporter
+      community.docker.docker_container:
+        name: node-exporter
+        image: prom/node-exporter:latest
+        state: started
+        restart_policy: always
+        published_ports: ["9100:9100"]
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/petshop:latest
+    - name: Lancer cAdvisor (Privilégié pour SOC)
+      community.docker.docker_container:
+        name: cadvisor
+        image: gcr.io/cadvisor/cadvisor:latest
+        state: started
+        restart_policy: always
+        privileged: yes
+        volumes:
+          - "/:/rootfs:ro"
+          - "/var/run:/var/run:rw"
+          - "/sys:/sys:ro"
+          - "/var/lib/docker/:/var/lib/docker:ro"
+        published_ports: ["8080:8080"]
 
-      # --- PARTIE 2 : ANSIBLE (DÉPLOIEMENT) ---
-      - name: Configuration de la clé SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+    # --- 4. SECTION SÉCURITÉ : DÉTECTION HYDRA (Loki/Promtail) ---
+    # Pour un vrai SOC, on surveille les tentatives de connexion échouées dans les logs
+    - name: Lancer Grafana Loki (Stockage des Logs de sécurité)
+      community.docker.docker_container:
+        name: loki
+        image: grafana/loki:latest
+        state: started
+        restart_policy: always
+        published_ports: ["3100:3100"]
 
-      - name: Installation d'Ansible
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ansible
-
-      - name: Lancement du Playbook Ansible
-        run: |
-          ansible-playbook -i inventory.ini deploy_petshop.yml \
-          --private-key ~/.ssh/id_rsa \
-          -u ubuntu \
-          --ssh-common-args='-o StrictHostKeyChecking=no'
-
-      - name: Nettoyage
-        if: always()
-        run: rm -f ~/.ssh/id_rsa
+    - name: Lancer Prometheus & Grafana
+      community.docker.docker_container:
+        name: "{{ item.name }}"
+        image: "{{ item.image }}"
+        state: started
+        restart_policy: always
+        published_ports: "{{ item.port }}"
+        volumes: "{{ item.volumes | default([]) }}"
+      loop:
+        - { name: 'prometheus', image: 'prom/prometheus:latest', port: ["9090:9090"], volumes: ["/etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"] }
+        - { name: 'grafana', image: 'grafana/grafana:latest', port: ["3000:3000"] }
