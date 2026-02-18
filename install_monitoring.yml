@@ -1,0 +1,65 @@
+---
+- name: Installation du Monitoring (Prometheus & Grafana)
+  hosts: webserver
+  become: yes
+  tasks:
+    - name: Créer un dossier pour la config Prometheus
+      file:
+        path: /etc/prometheus
+        state: directory
+
+    - name: Configuration de base de Prometheus
+      copy:
+        dest: /etc/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 5s
+          scrape_configs:
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets: ['localhost:9100']
+            - job_name: 'cadvisor'
+              static_configs:
+                - targets: ['localhost:8080']
+
+    - name: Lancer Node Exporter (Metrics Système)
+      docker_container:
+        name: node-exporter
+        image: prom/node-exporter:latest
+        state: started
+        restart_policy: always
+        network_mode: host  # Permet d'accéder aux métriques réelles de l'hôte
+
+    - name: Lancer Prometheus
+      docker_container:
+        name: prometheus
+        image: prom/prometheus:latest
+        state: started
+        restart_policy: always
+        network_mode: host  # Facilite la communication avec Node Exporter sur localhost:9100
+        volumes:
+          - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+    - name: Lancer Grafana
+      docker_container:
+        name: grafana
+        image: grafana/grafana:latest
+        state: started
+        restart_policy: always
+        published_ports:
+          - "3000:3000"
+        env:
+          GF_SECURITY_ADMIN_PASSWORD: "Passer123@"
+
+    - name: Lancer cAdvisor (Metrics Docker)
+      docker_container:
+        name: cadvisor
+        image: gcr.io/cadvisor/cadvisor:latest
+        state: started
+        restart_policy: always
+        network_mode: host
+        volumes:
+          - /:/rootfs:ro
+          - /var/run:/var/run:rw
+          - /sys:/sys:ro
+          - /var/lib/docker/:/var/lib/docker:ro

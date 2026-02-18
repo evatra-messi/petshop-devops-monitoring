@@ -1,0 +1,49 @@
+---
+- name: Installation du socle DevSecOps
+  hosts: webserver
+  become: yes
+  tasks:
+    - name: Mise à jour du cache APT
+      apt:
+        update_cache: yes
+
+    - name: Installation des pré-requis Docker
+      apt:
+        name: [apt-transport-https, ca-certificates, curl, software-properties-common, python3-pip]
+        state: present
+
+    - name: Ajout de la clé GPG Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Ajout du dépôt Docker
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu jammy stable
+        state: present
+
+    - name: Installation de Docker Engine
+      apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+        state: present
+
+    - name: Ajout de l'utilisateur ubuntu au groupe docker
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Installation de Trivy (Scanner de vulnérabilités)
+      shell: |
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      args:
+        creates: /usr/local/bin/trivy
+
+    - name: Lancement de SonarQube via Docker
+      docker_container:
+        name: sonarqube
+        image: sonarqube:lts-community
+        state: started
+        restart_policy: always
+        published_ports:
+          - "9000:9000"

@@ -1,0 +1,13 @@
+---
+- name: Deploiement de l'application Petshop
+  hosts: webserver
+  become: yes
+  tasks:
+    - name: Lancer le conteneur Petshop (version stable)
+      docker_container:
+        name: petshop-app
+        image: nginx:latest
+        state: started
+        restart_policy: always
+        published_ports:
+          - "80:80"

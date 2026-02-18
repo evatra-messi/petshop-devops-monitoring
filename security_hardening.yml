@@ -1,0 +1,43 @@
+---
+- name: Sécurisation du serveur (Hardening)
+  hosts: webserver
+  become: yes
+  tasks:
+    - name: Installation de Fail2Ban et UFW
+      apt:
+        name: [fail2ban, ufw]
+        state: present
+
+    - name: Configuration de UFW (Autoriser SSH, HTTP, Sonar, Grafana)
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - '22'    # SSH
+        - '80'    # Petshop App
+        - '9000'  # SonarQube
+        - '3000'  # Grafana
+        - '9090'  # Prometheus
+
+    - name: Activer le pare-feu UFW
+      ufw:
+        state: enabled
+        policy: deny
+
+    - name: Configurer Fail2Ban pour le SSH
+      copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [sshd]
+          enabled = true
+          port = ssh
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 5
+          bantime = 1h
+
+    - name: Redémarrer Fail2Ban
+      service:
+        name: fail2ban
+        state: restarted
