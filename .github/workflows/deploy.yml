@@ -1,24 +1,37 @@
-name: CI/CD Petshop Deployment
+name: CI/CD Petshop Full Pipeline
 
 on:
   push:
-    branches: [ main ] # Se déclenche à chaque push sur la branche main
-  workflow_dispatch:   # Permet de lancer le déploiement manuellement avec un bouton
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout du code
         uses: actions/checkout@v3
 
+      # --- PARTIE 1 : DOCKER (CONSTRUCTION) ---
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/petshop:latest
+
+      # --- PARTIE 2 : ANSIBLE (DÉPLOIEMENT) ---
       - name: Configuration de la clé SSH
         run: |
           mkdir -p ~/.ssh
-          # On récupère la clé depuis les secrets GitHub et on l'enregistre
           echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/id_rsa
-          # On donne les droits restrictifs obligatoires pour une clé SSH
           chmod 600 ~/.ssh/id_rsa
 
       - name: Installation d'Ansible
