@@ -1,67 +1,79 @@
 ---
-- name: Installation du Monitoring (Prometheus & Grafana)
-  hosts: webserver
+- name: Installation et Configuration du Monitoring SOC
+  hosts: all
   become: yes
   tasks:
-    - name: Créer un dossier pour la config Prometheus
+    # 1. Création du répertoire de configuration pour Prometheus
+    - name: Créer le dossier de configuration Prometheus
       file:
         path: /etc/prometheus
         state: directory
+        mode: '0755'
 
-    - name: Configuration de base de Prometheus
+    # 2. Copie de la configuration Prometheus (Celle qui fonctionne !)
+    - name: Configurer Prometheus (Targets)
       copy:
         dest: /etc/prometheus/prometheus.yml
         content: |
           global:
             scrape_interval: 5s
           scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
             - job_name: 'node_exporter'
               static_configs:
-                - targets: ['localhost:9100']
+                - targets: ['172.17.0.1:9100']
             - job_name: 'cadvisor'
               static_configs:
-                - targets: ['localhost:8080']
+                - targets: ['172.17.0.1:8080']
 
-    - name: Lancer Node Exporter (Metrics Système)
-      docker_container:
-        name: node-exporter
+    # 3. Lancement de Node Exporter (Métriques Système)
+    - name: Lancer le conteneur Node Exporter
+      community.docker.docker_container:
+        name: node_exporter
         image: prom/node-exporter:latest
         state: started
         restart_policy: always
-        network_mode: host  # Permet d'accéder aux métriques réelles de l'hôte
-        
-
-    - name: Lancer Grafana
-      docker_container:
-        name: grafana
-        image: grafana/grafana:latest
-        state: started
-        restart_policy: always
-        published_ports:- name: Lancer Prometheus
-      docker_container:
-      
-     - name: prometheus
-        image: prom/prometheus:latest
-        state: started
-        restart_policy: always
-        # Supprime network_mode: host et remplace par :
         published_ports:
-          - "9090:9090"
-        volumes:
-          - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-          - "3000:3000"
-        env:
-          GF_SECURITY_ADMIN_PASSWORD: "Passer123@"
+          - "9100:9100"
 
-    - name: Lancer cAdvisor (Metrics Docker)
-      docker_container:
+    # 4. Lancement de cAdvisor (Métriques Docker)
+    - name: Lancer le conteneur cAdvisor
+      community.docker.docker_container:
         name: cadvisor
         image: gcr.io/cadvisor/cadvisor:latest
         state: started
         restart_policy: always
-        network_mode: host
+        privileged: yes
         volumes:
-          - /:/rootfs:ro
-          - /var/run:/var/run:rw
-          - /sys:/sys:ro
-          - /var/lib/docker/:/var/lib/docker:ro
+          - "/:/rootfs:ro"
+          - "/var/run:/var/run:rw"
+          - "/sys:/sys:ro"
+          - "/var/lib/docker/:/var/lib/docker:ro"
+        published_ports:
+          - "8080:8080"
+
+    # 5. Lancement de Prometheus
+    - name: Lancer le conteneur Prometheus
+      community.docker.docker_container:
+        name: prometheus
+        image: prom/prometheus:latest
+        state: started
+        restart_policy: always
+        published_ports:
+          - "9090:9090"
+        volumes:
+          - "/etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"
+
+    # 6. Lancement de Grafana (Visualisation)
+    - name: Lancer le conteneur Grafana
+      community.docker.docker_container:
+        name: grafana
+        image: grafana/grafana:latest
+        state: started
+        restart_policy: always
+        published_ports:
+          - "3000:3000"
+        env:
+          GF_SECURITY_ADMIN_PASSWORD: "Passer123@"
