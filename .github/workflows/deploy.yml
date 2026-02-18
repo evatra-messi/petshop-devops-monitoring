@@ -2,11 +2,13 @@ name: CI/CD Petshop Deployment
 
 on:
   push:
-    branches: [ main ] # Se déclenche dès que tu push sur la branche main
+    branches: [ main ] # Se déclenche à chaque push sur la branche main
+  workflow_dispatch:   # Permet de lancer le déploiement manuellement avec un bouton
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout du code
         uses: actions/checkout@v3
@@ -14,11 +16,15 @@ jobs:
       - name: Configuration de la clé SSH
         run: |
           mkdir -p ~/.ssh
+          # On récupère la clé depuis les secrets GitHub et on l'enregistre
           echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/id_rsa
+          # On donne les droits restrictifs obligatoires pour une clé SSH
           chmod 600 ~/.ssh/id_rsa
 
       - name: Installation d'Ansible
-        run: sudo apt-get update && sudo apt-get install -y ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
 
       - name: Lancement du Playbook Ansible
         run: |
@@ -26,3 +32,7 @@ jobs:
           --private-key ~/.ssh/id_rsa \
           -u ubuntu \
           --ssh-common-args='-o StrictHostKeyChecking=no'
+
+      - name: Nettoyage
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
