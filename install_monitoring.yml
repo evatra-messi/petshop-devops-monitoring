@@ -3,15 +3,13 @@
   hosts: all
   become: yes
   tasks:
-    # 1. Création du répertoire de configuration pour Prometheus
     - name: Créer le dossier de configuration Prometheus
       file:
         path: /etc/prometheus
         state: directory
         mode: '0755'
 
-    # 2. Copie de la configuration Prometheus (Celle qui fonctionne !)
-    - name: Configurer Prometheus (Targets)
+    - name: Configurer Prometheus (Cibles 172.17.0.1)
       copy:
         dest: /etc/prometheus/prometheus.yml
         content: |
@@ -28,52 +26,17 @@
               static_configs:
                 - targets: ['172.17.0.1:8080']
 
-    # 3. Lancement de Node Exporter (Métriques Système)
-    - name: Lancer le conteneur Node Exporter
+    - name: Lancer les conteneurs (NodeExporter, cAdvisor, Prometheus, Grafana)
       community.docker.docker_container:
-        name: node_exporter
-        image: prom/node-exporter:latest
+        name: "{{ item.name }}"
+        image: "{{ item.image }}"
         state: started
         restart_policy: always
-        published_ports:
-          - "9100:9100"
-
-    # 4. Lancement de cAdvisor (Métriques Docker)
-    - name: Lancer le conteneur cAdvisor
-      community.docker.docker_container:
-        name: cadvisor
-        image: gcr.io/cadvisor/cadvisor:latest
-        state: started
-        restart_policy: always
-        privileged: yes
-        volumes:
-          - "/:/rootfs:ro"
-          - "/var/run:/var/run:rw"
-          - "/sys:/sys:ro"
-          - "/var/lib/docker/:/var/lib/docker:ro"
-        published_ports:
-          - "8080:8080"
-
-    # 5. Lancement de Prometheus
-    - name: Lancer le conteneur Prometheus
-      community.docker.docker_container:
-        name: prometheus
-        image: prom/prometheus:latest
-        state: started
-        restart_policy: always
-        published_ports:
-          - "9090:9090"
-        volumes:
-          - "/etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"
-
-    # 6. Lancement de Grafana (Visualisation)
-    - name: Lancer le conteneur Grafana
-      community.docker.docker_container:
-        name: grafana
-        image: grafana/grafana:latest
-        state: started
-        restart_policy: always
-        published_ports:
-          - "3000:3000"
-        env:
-          GF_SECURITY_ADMIN_PASSWORD: "Passer123@"
+        published_ports: "{{ item.ports }}"
+        privileged: "{{ item.privileged | default('no') }}"
+        volumes: "{{ item.volumes | default([]) }}"
+      loop:
+        - { name: 'node_exporter', image: 'prom/node-exporter:latest', ports: ["9100:9100"] }
+        - { name: 'cadvisor', image: 'gcr.io/cadvisor/cadvisor:latest', ports: ["8080:8080"], privileged: 'yes', volumes: ["/:/rootfs:ro", "/var/run:/var/run:rw", "/sys:/sys:ro", "/var/lib/docker/:/var/lib/docker:ro"] }
+        - { name: 'prometheus', image: 'prom/prometheus:latest', ports: ["9090:9090"], volumes: ["/etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"] }
+        - { name: 'grafana', image: 'grafana/grafana:latest', ports: ["3000:3000"] }
