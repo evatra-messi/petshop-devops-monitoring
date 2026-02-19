@@ -23,10 +23,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ansible
 
-      - name: Lancement du Playbook Complet (SOC + Hydra + App)
+      # Ici, on appelle tes deux fichiers existants dans l'ordre
+      - name: Lancement du Playbook Application
         run: |
           ansible-playbook -i inventory.ini deploy_petshop.yml \
-          --private-key ~/.ssh/id_rsa \
-          -u ubuntu \
-          -e "docker_username=${{ secrets.DOCKER_USERNAME }}" \
+          --private-key ~/.ssh/id_rsa -u ubuntu \
+          --ssh-common-args='-o StrictHostKeyChecking=no'
+
+      - name: Lancement du Playbook Monitoring
+        run: |
+          ansible-playbook -i inventory.ini install_monitoring.yml \
+          --private-key ~/.ssh/id_rsa -u ubuntu \
           --ssh-common-args='-o StrictHostKeyChecking=no'
