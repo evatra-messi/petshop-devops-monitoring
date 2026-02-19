@@ -14,11 +14,13 @@
         port: "{{ item }}"
         proto: tcp
       loop:
-        - '22'    # SSH
-        - '80'    # Petshop App
-        - '9000'  # SonarQube
-        - '3000'  # Grafana
-        - '9090'  # Prometheus
+        - '22'    # SSH (Pour Ansible)
+        - '80'    # Petshop App (Accès utilisateur)
+        - '9000'  # SonarQube (Analyse de code)
+        - '3000'  # Grafana (Visualisation SOC)
+        - '9090'  # Prometheus (Moteur de monitoring)
+        - '9100'  # Node Exporter (Métriques serveur)
+        - '8080'  # cAdvisor (Métriques Docker)
 
     - name: Activer le pare-feu UFW
       ufw:
