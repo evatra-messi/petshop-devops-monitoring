@@ -98,3 +98,14 @@ git push origin main
 ssh -i ~/ma-cle.pem ubuntu@44.208.11.236
 ls
 ssh -i ~/ma-cle.pem ubuntu@44.208.11.236
+git add .
+git commit -m "Déploiement"
+git push origin main
+git pull origin main --rebase
+git push origin main
+ssh -i ~/ma-cle.pem ubuntu@44.208.11.236
+nano index.html
+git add .
+git commit -m "Changement"
+git push origin main
+ssh -i ~/ma-cle.pem ubuntu@44.208.11.236
